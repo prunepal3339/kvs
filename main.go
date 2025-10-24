@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
 
+	"github.com/prunepal3339/kvs/handler"
 	"github.com/prunepal3339/kvs/resp"
 )
 
@@ -27,9 +29,28 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println(value)
+		if value.Tag() != resp.TAG_ARR {
+			fmt.Println("Invalid request, expected array as root value.")
+			continue
+		}
+		arrayValue := value.Val().([]resp.Value)
+		if len(arrayValue) == 0 {
+			fmt.Println("Invalid request, expected array to be non empty.")
+			continue
+		}
+		command := strings.ToUpper(arrayValue[0].Val().(string))
+
+		args := arrayValue[1:] // []resp.Value
+		handler, ok := handler.Handlers[command]
 
 		writer := resp.NewWriter(conn)
-		writer.Write(resp.NewValue(resp.TAG_STR, "Ok"))
+
+		if !ok {
+			fmt.Println("Invalid command: ", command)
+			writer.Write(resp.NewValue(resp.TAG_STR, ""))
+			continue
+		}
+		result := handler(args)
+		writer.Write(result)
 	}
 }

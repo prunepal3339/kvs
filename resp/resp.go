@@ -51,6 +51,13 @@ type Value struct {
 	val any
 }
 
+func (v Value) Tag() Tag {
+	return v.tag
+}
+func (v Value) Val() any {
+	return v.val
+}
+
 func (v Value) String() string {
 	switch v.tag {
 	case TAG_NIL:
