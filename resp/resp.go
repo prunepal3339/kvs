@@ -16,20 +16,63 @@ const (
 	ARRAY   = '*'
 )
 
-type Tag string
+type Tag byte
 
 const (
-	TAG_NIL  Tag = "nil"
-	TAG_STR  Tag = "str"
-	TAG_BULK Tag = "bulk"
-	TAG_INT  Tag = "int"
-	TAG_ARR  Tag = "array"
-	TAG_ERR  Tag = "error"
+	TAG_NIL Tag = iota
+	TAG_STR
+	TAG_BULK
+	TAG_INT
+	TAG_ARR
+	TAG_ERR
 )
+
+func (t Tag) String() string {
+	switch t {
+	case TAG_NIL:
+		return "nil"
+	case TAG_STR:
+		return "string"
+	case TAG_BULK:
+		return "bulk"
+	case TAG_INT:
+		return "int"
+	case TAG_ARR:
+		return "array"
+	case TAG_ERR:
+		return "error"
+	default:
+		return fmt.Sprintf("Unknown(0x%02X)", byte(t))
+	}
+}
 
 type Value struct {
 	tag Tag
 	val any
+}
+
+func (v Value) String() string {
+	switch v.tag {
+	case TAG_NIL:
+		return "nil"
+	case TAG_STR:
+		return fmt.Sprintf("(string %s)", v.val.(string))
+	case TAG_ARR:
+		arrValue := v.val.([]Value)
+		var s string
+		for i := 0; i < len(arrValue); i++ {
+			s += arrValue[i].String()
+		}
+		return fmt.Sprintf("(array %s)", s)
+	case TAG_ERR:
+		return fmt.Sprintf("(error %s)", v.val.(string))
+	case TAG_INT:
+		return fmt.Sprintf("(int %d)", v.val.(int))
+	case TAG_BULK:
+		return fmt.Sprintf("(bulk %s)", v.val.(string))
+	default:
+		return "(unknown value)"
+	}
 }
 
 func NewValue(tag Tag, val any) Value {
