@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/prunepal3339/kvs/handler"
+	"github.com/prunepal3339/kvs/persistence"
 	"github.com/prunepal3339/kvs/resp"
 )
 
@@ -16,12 +17,21 @@ func main() {
 		return
 	}
 	fmt.Println("Listening on port :6379")
+
+	aof, err := persistence.NewAof("kvsdb.aof")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer aof.Close()
+
 	conn, err := l.Accept()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer conn.Close()
+
 	for {
 		reader := resp.NewResp(conn)
 		value, err := reader.Read()
@@ -50,6 +60,11 @@ func main() {
 			writer.Write(resp.NewValue(resp.TAG_STR, ""))
 			continue
 		}
+
+		if command == "SET" || command == "HSET" {
+			aof.Write(value)
+		}
+
 		result := handler(args)
 		writer.Write(result)
 	}

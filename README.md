@@ -21,3 +21,8 @@ An attempt to clone redis server from scratch in Go while keeping it minimal.
 | `HGET hash field` | Fetch a value from a hash. Returns `nil` if hash or field does not exist. | `HGET users user1` | `HGET users user2` → `"Bob"`<br>`HGET users user3` → `nil` |
 | `HGETALL hash` | Fetch all fields and values from a hash as a flat array `[field1, value1, ...]`. Returns empty array if hash does not exist. | `HGETALL users` | `HGETALL users` → `["user1", "Alice", "user2", "Bob"]`<br>`HGETALL unknown` → `[]` |
 ---
+
+## Persistence
+#### Append only file (AOF)
+* Append-only file for logging purpose only at the moment.
+* Saves the command operations like SET and HSET into a file called `kvsdb.aof`.
