@@ -2,6 +2,7 @@ package resp
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -15,13 +16,6 @@ const (
 	ARRAY   = '*'
 )
 
-//	type Value struct {
-//		typ   string
-//		str   string
-//		num   int
-//		bulk  string
-//		array []value
-//	}
 type Tag string
 
 const (
@@ -36,6 +30,97 @@ const (
 type Value struct {
 	tag Tag
 	val any
+}
+
+func NewValue(tag Tag, val any) Value {
+	return Value{
+		tag,
+		val,
+	}
+}
+func (v Value) Marshal() []byte {
+	switch v.tag {
+	case TAG_ARR:
+		return v.marshalArray()
+	case TAG_BULK:
+		return v.marshalBulk()
+	case TAG_NIL:
+		return v.marshalNil()
+	case TAG_STR:
+		return v.marshalString()
+	case TAG_ERR:
+		return v.marshalError()
+	default:
+		return []byte{}
+	}
+}
+func (v Value) marshalString() []byte {
+	var bytes []byte
+	bytes = append(bytes, STRING)
+	strval := v.val.(string)
+	bytes = append(bytes, strval...)
+	bytes = append(bytes, '\r', '\n')
+	return bytes
+}
+
+func (v Value) marshalArray() []byte {
+	var bytes []byte
+	bytes = append(bytes, ARRAY)
+	arrval := v.val.([]Value)
+	size := len(arrval)
+	bytes = append(bytes, strconv.Itoa(size)...)
+	bytes = append(bytes, '\r', '\n')
+
+	for i := 0; i < size; i++ {
+		bytes = append(bytes, arrval[i].Marshal()...)
+	}
+	return bytes
+}
+
+func (v Value) marshalBulk() []byte {
+	var bytes []byte
+	bytes = append(bytes, BULK)
+	strval := v.val.(string)
+	length := len(strval)
+	bytes = append(bytes, strconv.Itoa(length)...)
+	bytes = append(bytes, '\r', '\n')
+
+	bytes = append(bytes, strval...)
+	bytes = append(bytes, '\r', '\n')
+
+	return bytes
+}
+
+func (v Value) marshalNil() []byte {
+	var bytes []byte
+	bytes = append(bytes, '$', '-', '1', '\r', '\n')
+	return bytes
+}
+func (v Value) marshalError() []byte {
+	var bytes []byte
+	bytes = append(bytes, ERROR)
+	strval := v.val.(string)
+	bytes = append(bytes, strval...)
+	bytes = append(bytes, '\r', '\n')
+
+	return bytes
+}
+
+type Writer struct {
+	writer io.Writer
+}
+
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{writer: w}
+}
+func (w *Writer) Write(v Value) error {
+	bytes := v.Marshal()
+
+	_, err := w.writer.Write(bytes)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type Resp struct {
@@ -83,11 +168,61 @@ func (r *Resp) Read() (Value, error) {
 		return r.readArray()
 	case BULK:
 		return r.readBulk()
+	case ERROR:
+		return r.readError()
+	case STRING:
+		return r.readString()
+	case INTEGER:
+		return r.readInt()
 	default:
 		fmt.Printf("Unknown type: %v", string(_type))
 		return Value{}, nil
 	}
 }
+func (r *Resp) readInt() (Value, error) {
+	v := Value{}
+	v.tag = TAG_INT
+	ival, _, err := r.readInteger()
+	if err != nil {
+		return v, err
+	}
+	v.val = ival
+
+	return v, nil
+}
+func (r *Resp) readError() (Value, error) {
+	v := Value{}
+	v.tag = TAG_ERR
+
+	errval, err := r.readString()
+
+	if err != nil {
+		return v, err
+	}
+	v.val = errval
+
+	return v, nil
+}
+func (r *Resp) readString() (Value, error) {
+	v := Value{}
+	v.tag = TAG_STR
+	strval, err := r.reader.ReadString('\r')
+	if err != nil {
+		return v, err
+	}
+	lf, err := r.reader.ReadByte()
+	if err != nil {
+		return v, err
+	}
+	if lf != '\n' {
+		return v, errors.New("invalid line terminator")
+	}
+
+	v.val = strval
+
+	return v, nil
+}
+
 func (r *Resp) readArray() (Value, error) {
 	v := Value{}
 	v.tag = TAG_ARR

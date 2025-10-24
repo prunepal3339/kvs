@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-	// fmt.Println("Hello world!")
 	l, err := net.Listen("tcp", ":6379")
 	if err != nil {
 		fmt.Println(err)
@@ -22,13 +21,15 @@ func main() {
 	}
 	defer conn.Close()
 	for {
-		resp := resp.NewResp(conn)
-		value, err := resp.Read()
+		reader := resp.NewResp(conn)
+		value, err := reader.Read()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 		fmt.Println(value)
-		conn.Write([]byte("+OK\r\n"))
+
+		writer := resp.NewWriter(conn)
+		writer.Write(resp.NewValue(resp.TAG_STR, "Ok"))
 	}
 }
