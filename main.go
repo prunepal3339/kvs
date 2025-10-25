@@ -23,7 +23,6 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	defer aof.Close()
 
 	aof.Read(func(value resp.Value) {
 		values := value.Val().([]resp.Value)
@@ -39,14 +38,18 @@ func main() {
 
 		handlerFunc(args)
 	})
-
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println(err)
-		return
+	defer aof.Close()
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		go handleConnection(conn, aof)
 	}
+}
+func handleConnection(conn net.Conn, aof *persistence.Aof) {
 	defer conn.Close()
-
 	for {
 		reader := resp.NewResp(conn)
 		value, err := reader.Read()

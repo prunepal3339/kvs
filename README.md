@@ -26,3 +26,4 @@ An attempt to clone redis server from scratch in Go while keeping it minimal.
 #### Append only file (AOF)
 * Append-only file for logging purpose only at the moment.
 * Saves the command operations like SET and HSET into a file called `kvsdb.aof`.
+* On server restart, the server loads `kvsdb.aof` from the current directory, replaying its append-only commands to restore data.
