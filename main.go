@@ -69,21 +69,26 @@ func handleConnection(conn net.Conn, aof *persistence.Aof) {
 		command := strings.ToUpper(arrayValue[0].Val().(string))
 
 		args := arrayValue[1:] // []resp.Value
-		handler, ok := handler.Handlers[command]
+		handleFunc, ok := handler.Handlers[command]
 
 		writer := resp.NewWriter(conn)
+		if ok {
+			result := handleFunc(args)
 
+			if command == "SET" || command == "HSET" {
+				aof.Write(value)
+			}
+
+			writer.Write(result)
+			continue
+		}
+
+		writeHandleFunc, ok := handler.WriteHandlers[command]
 		if !ok {
 			fmt.Println("Invalid command: ", command)
 			writer.Write(resp.NewValue(resp.TAG_STR, ""))
 			continue
 		}
-
-		if command == "SET" || command == "HSET" {
-			aof.Write(value)
-		}
-
-		result := handler(args)
-		writer.Write(result)
+		go writeHandleFunc(writer, args)
 	}
 }

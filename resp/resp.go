@@ -100,9 +100,19 @@ func (v Value) Marshal() []byte {
 		return v.marshalString()
 	case TAG_ERR:
 		return v.marshalError()
+	case TAG_INT:
+		return v.marshalInt()
 	default:
 		return []byte{}
 	}
+}
+func (v Value) marshalInt() []byte {
+	var bytes []byte
+	bytes = append(bytes, INTEGER)
+	intval := v.val.(int)
+	bytes = append(bytes, strconv.Itoa(intval)...)
+	bytes = append(bytes, '\r', '\n')
+	return bytes
 }
 func (v Value) marshalString() []byte {
 	var bytes []byte

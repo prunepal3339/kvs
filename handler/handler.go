@@ -14,6 +14,12 @@ var Handlers = map[string]func([]resp.Value) resp.Value{
 	"HGET":    hget,
 	"HSET":    hset,
 	"HGETALL": hgetall,
+
+	"PUBLISH": publish,
+	"PUBSUB":  pubsub,
+}
+var WriteHandlers = map[string]func(*resp.Writer, []resp.Value) resp.Value{
+	"SUBSCRIBE": subscribe,
 }
 
 type SafeMap struct {
@@ -23,6 +29,53 @@ type SafeMap struct {
 type SafeHMap struct {
 	sync.RWMutex
 	data map[string]map[string]any
+}
+type Subscriber struct {
+	Ch chan resp.Value
+}
+
+type Topic struct {
+	sync.RWMutex
+	Name        string
+	subscribers []*Subscriber
+}
+
+func (t *Topic) update(topic resp.Value) {
+	if len(t.subscribers) == 0 {
+		return
+	}
+	for _, sub := range t.subscribers {
+		sub.Ch <- topic
+	}
+}
+
+type TopicRegistry struct {
+	sync.RWMutex
+	data map[string]*Topic
+}
+
+func NewTopicRegistry() *TopicRegistry {
+	return &TopicRegistry{
+		data: make(map[string]*Topic),
+	}
+}
+
+var topicRegistry = NewTopicRegistry()
+
+func (r *TopicRegistry) getOrCreate(name string) *Topic {
+	r.RLock()
+	if t, exists := r.data[name]; exists {
+		return t
+	}
+	r.RUnlock()
+
+	r.Lock()
+	t := &Topic{
+		Name: name,
+	}
+	r.data[name] = t
+	r.Unlock()
+	return t
 }
 
 var mySet = &SafeMap{data: make(map[string]any)}
@@ -107,4 +160,46 @@ func hgetall(args []resp.Value) resp.Value {
 		arrayValue = append(arrayValue, resp.NewValue(resp.TAG_STR, v))
 	}
 	return resp.NewValue(resp.TAG_ARR, arrayValue)
+}
+
+func publish(args []resp.Value) resp.Value {
+	if len(args) != 2 {
+		return resp.NewValue(resp.TAG_ERR, "[USAGE]: PUBLISH topic message")
+	}
+	topicName := args[0].Val().(string)
+	value := args[1]
+
+	topic := topicRegistry.getOrCreate(topicName)
+
+	topic.Lock()
+	topic.update(value)
+	topic.Unlock()
+
+	topic.RLock()
+	count := len(topic.subscribers)
+	topic.RUnlock()
+
+	return resp.NewValue(resp.TAG_INT, count)
+}
+func subscribe(writer *resp.Writer, args []resp.Value) resp.Value {
+	if len(args) != 1 {
+		return resp.NewValue(resp.TAG_ERR, "[USAGE]: SUBSCRIBE topic")
+	}
+	topicName := args[0].Val().(string)
+	topic := topicRegistry.getOrCreate(topicName)
+	sub := &Subscriber{
+		Ch: make(chan resp.Value),
+	}
+	topic.Lock()
+	topic.subscribers = append(topic.subscribers, sub)
+	topic.Unlock()
+
+	for msg := range sub.Ch {
+		writer.Write(msg)
+	}
+	return resp.NewValue(resp.TAG_STR, "SUCCESS")
+}
+
+func pubsub(args []resp.Value) resp.Value {
+	return resp.NewValue(resp.TAG_STR, "OK")
 }
